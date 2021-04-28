@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title></title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+	<link rel="stylesheet" href="./lib/mint-ui/style.css">
+	<link rel="stylesheet" href="./lib/font-awesome-4.7.0/css/font-awesome.min.css">
+	<link rel="stylesheet" href="./common/css/jas-main.css">
+</head>
+<style>
+	.footer {
+		color: #666;
+		height: 55px;
+		position: relative;
+	}
+</style>
+
+<body>
+	<div class="_outer-wrapper" v-cloak>
+
+		<jas-header title="施工数据采集" :is-return="false"></jas-header>
+
+		<div id="content" v-setheight></div>
+
+		<div class="footer">
+			<mt-tabbar v-model="selectedTab">
+				<mt-tab-item :id="tab.name" v-for="tab in tabs">
+					<i style="font-size:24px;" slot="icon" :class="tab.icon" aria-hidden="true"></i>
+					<span>{{tab.name}}</span>
+				</mt-tab-item>
+			</mt-tabbar>
+		</div>
+	</div>
+</body>
+
+<script src="./appcan/js/appcan.js"></script>
+<script src="./lib/vue/vue.js"></script>
+<script src="./lib/mint-ui/index.js"></script>
+<script src="./common/js/jas-tools.js"></script>
+<script src="./common/components/jas-components.js"></script>
+
+<script>
+	var vm = new Vue({
+		el: '._outer-wrapper',
+		data: function () {
+			return {
+				selectedTab: '数据统计',
+				isInitResume: false,
+				tabs: [ //
+					// {
+					// 	name: '代码例子',
+					// 	icon: 'fa fa-home',
+					// 	url: 'pages/_demo/_demo.html',
+					// },
+					{
+						name: '数据统计',
+						icon: 'fa fa-pie-chart',
+						url: 'pages/data-statistics/data-statistics.html',
+					}, {
+						name: '数据录入',
+						icon: 'fa fa-pencil-square',
+						url: 'pages/data-collection/data-collection.html',
+					}, {
+						name: '数据审核',
+						icon: 'fa fa-lock',
+						url: 'pages/data-review/index.html',
+					}, {
+						name: '地图展示',
+						icon: 'fa fa-globe',
+						url: 'pages/map-view/map-view.html',
+					}, {
+						name: '个人中心',
+						icon: 'fa fa-user',
+						url: 'pages/user-center/index.html',
+					},
+				],
+			}
+		},
+
+		created: function () {
+			this.initTabs();
+		},
+		watch: {
+			selectedTab: function () {
+				this.isAppcanReady && this.openCurrentPage();
+			}
+		},
+		mounted: function () {
+			var that = this;
+			appcan.ready(function () {
+				that.isAppcanReady = true;
+				that.openCurrentPage();
+				appcan.window.on('resume', function () {
+					if (!that.isInitResume) {
+						that.isInitResume = true;
+						return;
+					}
+					if (that.selectedTab === '个人中心') {
+						var scriptContent = 'vm.initPage()';
+					}
+					if (that.selectedTab === '数据录入') {
+						var scriptContent = 'vm.initPage()';
+					}
+					if (that.selectedTab === '数据审核') {
+						var scriptContent = 'vm.requestTotalNum()';
+					}
+					if (that.selectedTab === '地图展示') {
+						var scriptContent = 'vm.initPage()';
+					}
+					scriptContent && appcan.window.evaluatePopoverScript('index', that.openCurrentPageId, scriptContent);
+				});
+				//监听退出键
+				that.checkOut();
+			});
+		},
+		methods: {
+			initTabs: function () {
+				var userBo = JSON.parse(localStorage.getItem('user'));
+				var userName = userBo.loginName;
+				// 1：施工单位；2：监理单位；3：检测单位；4：建设单位；5：厂商；0：顶级部门
+				var unitType = userBo.unitType;
+				if (unitType == 1) { // 施工单位
+					this.tabs.splice(0, 1);
+					this.tabs.splice(1, 1);
+					this.selectedTab = this.tabs[0].name;
+					return;
+				}
+				if (unitType == 2) { // 监理单位
+					this.tabs.splice(0, 2);
+					this.selectedTab = this.tabs[0].name;
+					return;
+				}
+				if (unitType == 4) { // 建设单位
+					this.tabs.splice(1, 2);
+					this.selectedTab = this.tabs[0].name;
+					return;
+				}
+				appcan.window.close();
+			},
+			afterProjectChanged: function () { // 供 切换项目界面 调用的方法
+				appcan.window.evaluatePopoverScript('index', 'pages/data-collection/data-collection.html', 'vm.initPage()');
+				appcan.window.evaluatePopoverScript('index', 'pages/data-review/index.html', 'vm.initPage()');
+				appcan.window.evaluatePopoverScript('index', 'pages/user-center/index.html', 'vm.initPage()');
+			},
+			openCurrentPage: function () {
+				var that = this;
+				var src = '';
+				this.tabs.forEach(function (item) {
+					if (item.name === that.selectedTab) {
+						src = item.url;
+						that.openCurrentPageId = src;
+					}
+				});
+				/**
+				 *适配4.3引擎 
+				 */
+				var top = Math.floor($('#content').offset().top);
+				var height = Math.floor($('#content').height());
+				var width = Math.floor($('#content').width());
+				/**
+				 *适配4.1引擎 
+				 */
+				// var top = Math.floor($('#content').offset().top * (window.devicePixelRatio || 1));
+				// var height = Math.floor($('#content').height() * (window.devicePixelRatio || 1));
+				// var width = Math.floor($('#content').width() * (window.devicePixelRatio || 1));
+				if (this[src]) {
+					appcan.window.bringPopoverToFront(src);
+					if (that.selectedTab == '地图展示') {
+						appcan.window.evaluatePopoverScript('index', 'pages/map-view/map-view.html', 'vm.initPage()');
+					} else {
+						appcan.window.evaluatePopoverScript('index', 'pages/map-view/map-view.html', 'vm.closeMap()');
+					}
+				} else {
+					this[src] = true;
+					if (that.selectedTab !== '地图展示') {
+						appcan.window.evaluatePopoverScript('index', 'pages/map-view/map-view.html', 'vm.closeMap()');
+					}
+					appcan.window.openPopover({
+						name: src,
+						dataType: 0,
+						url: src,
+						left: 0,
+						top: top,
+						width: width,
+						height: height,
+					});
+				}
+			},
+			goToLogin: function () {
+				appcan.window.open('login', 'login.html', 0, 16, 0, 0, 0);
+			},
+			checkOut: function () { //退出应用
+				//监听手机物理返回键
+				appcan.window.monitorKey(0, 1, function (id) { // id:要拦截的键值id,0-返回键，1-菜单键 ;enable:是否拦截,0-不拦截，1-拦截
+					var _msg = "您是否要退出施工数据采集？";
+					appcan.window.confirm({
+						title: '提示',
+						content: _msg,
+						buttons: ['确定', '取消'],
+						callback: function (err, data, dataType, optId) {
+							if (data == 0) {
+								uexWidgetOne.exit(0);
+							}
+						}
+					});
+				});
+			}
+		},
+	});
+</script>
+
+</html>

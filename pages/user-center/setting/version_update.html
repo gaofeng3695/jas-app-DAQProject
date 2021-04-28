@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html class="um landscape min-width-240px min-width-320px min-width-480px min-width-768px min-width-1024px">
+
+<head>
+	<title></title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+	<link rel="stylesheet" href="./../../../lib/mint-ui/style.css">
+	<link rel="stylesheet" href="./../../../appcan/css/ui-box.css">
+	<link rel="stylesheet" href="./../../../appcan/css/ui-color.css">
+	<link rel="stylesheet" href="./../../../lib/font-awesome-4.7.0/css/font-awesome.min.css">
+	<link rel="stylesheet" href="./../../../common/css/jas-main.css">
+	<style type="text/css">
+		.logo {
+			margin: 0 auto;
+		}
+
+		.logo img {
+			height: 150px;
+			width: 150px;
+		}
+
+		.txt-c {
+			text-align: center;
+		}
+
+		.ft16 {
+			font-size: 16px;
+		}
+	</style>
+</head>
+
+<body class="um-vp" ontouchstart>
+	<div id="page" class="up ub ub-ver bc-bg" style="height:100%;" tabindex="0">
+		<jas-header title="版本更新"></jas-header>
+		<div class="ub-f1" style="background:#fff;">
+			<div class="logo" style="background:#fff;">
+				<div class="ub ub-pc uinn logo" style="padding:0;padding-top:120px;padding-bottom:20px">
+					<img src="../../../common/images/login.png" alt="企业logo">
+				</div>
+				<div v-show="isLoading" class="txt-c">正在检查更新...</div>
+				<div v-show="!isLoading" class="txt-c">
+					<div v-show="!isToUpdate" class="ft16">
+						<span>已经是最新版本 </span>
+						<span>{{vClient}}</span>
+					</div>
+					<div v-show="isToUpdate">
+						<div class="ft16">
+							<span>发现新版本 </span>
+							<span>{{vServer}}</span>
+						</div>
+						<div style="color:#999;padding-top:10px;" v-show="versionDesc" v-html="versionDescHtml"></div>
+					</div>
+				</div>
+
+				<!-- <div class="" style="border:none;padding:25px 10px;width:100%;">
+					<mt-button size="small" type="primary" style="width:100%" @click="clickUpdate">{{}}</mt-button>
+				</div> -->
+			</div>
+		</div>
+		<jas-button-footer :buttons="[isToUpdate?'立即更新':'检查更新']" @click="clickUpdate"></jas-button-footer>
+	</div>
+	<script src="./../../../appcan/js/appcan.js"></script>
+	<script src="./../../../lib/vue/vue.js"></script>
+	<script src="./../../../lib/mint-ui/index.js"></script>
+	<script src="./../../../common/js/common_device.js"></script>
+	<script src="./../../../common/js/common_download.js"></script>
+	<script src="./../../../common/js/jas-tools.js"></script>
+	<script src="./../../../common/components/jas-components.js"></script>
+</body>
+<script>
+	var vm = new Vue({
+		el: "#page",
+		data: function () {
+			return {
+
+				vClient: '0.0.0',
+				vServer: '0.0.0',
+				isLoading: true,
+				downloadUrl: '',
+				versionDesc: '',
+			}
+		},
+		computed: {
+			isToUpdate: function () {
+				var aClient = this.vClient.split('.');
+				var aServer = this.vServer.split('.');
+				// alert(aClient)
+				if (aServer[0] > aClient[0]) return true;
+				if (+aServer[0] == +aClient[0] && aServer[1] > aClient[1]) return true;
+				if (+aServer[0] == +aClient[0] && +aServer[1] == +aClient[1] && aServer[2] > aClient[2]) return true;
+				return false;
+			},
+			versionDescHtml: function () {
+				return this.versionDesc.split('&').join('<br/>');
+			}
+		},
+		mounted: function () {
+			var that = this;
+			appcan.ready(function () {
+				that.vClient = uexWidgetOne.getCurrentWidgetInfo().version;
+				that.getAppVersionFromServer();
+			});
+		},
+		methods: {
+			getAppVersionFromServer: function () {
+				var that = this;
+				var url = "/appversion/getActiveVersion.do?productId=daq&clientType=Android";
+				that.isLoading = true;
+				that.$indicator.open({
+					text: '正在检查更新...',
+					spinnerType: 'fading-circle'
+				});
+				jasTools.ajax.get(url, {}, function (data) {
+					that.$indicator.close();
+					that.isLoading = false;
+					that.versionDesc = data.data.versionDesc;
+					that.vServer = data.data.appcanVersion;
+					that.downloadUrl = data.data.url;
+				}, function () {
+					that.$indicator.close();
+					that.isLoading = false;
+				});
+			},
+			clickUpdate: function () {
+				var that = this;
+				if (this.isToUpdate) {
+					if (this.isDownloading) {
+						this.$toast('正在下载中，请稍后...')
+						return;
+					}
+					this.isDownloading = true;
+					setTimeout(function () {
+						that.isDownloading = false;
+					}, 10000);
+					this.downloadRightNow();
+				} else {
+					this.getAppVersionFromServer();
+				}
+			},
+			downloadRightNow: function () { //立即更新
+				var that = this;
+				JasDevice.getConnectStatus(function (params) {
+					if (params == 0) {
+						// alert(that.downloadUrl);
+						that.downloadUrl && downLoadNewApp(that.downloadUrl);
+					} else if (params == -1) {
+						that.$toast("您好，当前无网络，无法下载!");
+					} else {
+						appcan.window.alert({
+							title: "温馨提示",
+							content: "您正在使用流量进行下载，是否继续？",
+							buttons: ['是', '否'],
+							callback: function (err, data, dataType, optId) {
+								if (!err && data == 0) {
+									that.downloadUrl && downLoadNewApp(that.downloadUrl);
+								}
+							}
+						});
+					}
+				});
+			}
+		}
+	})
+</script>
+
+</html>

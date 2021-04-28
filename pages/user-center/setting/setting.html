@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title></title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+	<link rel="stylesheet" href="./../../../lib/mint-ui/style.css">
+	<link rel="stylesheet" href="./../../../lib/font-awesome-4.7.0/css/font-awesome.min.css">
+	<link rel="stylesheet" href="./../../../common/css/jas-main.css">
+</head>
+<style>
+	/*.mint-cell {
+		margin-bottom: 10px;
+	}*/
+</style>
+
+<body>
+	<div class="_outer-wrapper " v-cloak>
+		<jas-header title="个人设置"></jas-header>
+		<div v-setheight style="overflow: auto;">
+			<mt-cell v-for="item in setList" :title="item.name" :is-link="item.isLink" @click.native="goto(item)" :style="item.style">
+				<span v-show="item.value">{{item.value}}</span>
+				<!-- <img :src="item.icon" v-show="item.icon" style="height:12vw;width:12vw"> -->
+				<div v-if="item.icon" style="padding:3px;">
+
+					<div :style="styleBgImg" style="height:12vw;width:12vw;border-radius: 50%;"></div>
+				</div>
+			</mt-cell>
+			<mt-actionsheet :actions="actions" v-model="sheetVisible"></mt-actionsheet>
+		</div>
+	</div>
+</body>
+<script src="./../../../appcan/js/appcan.js"></script>
+<script src="./../../../lib/vue/vue.js"></script>
+<script src="./../../../lib/mint-ui/index.js"></script>
+<script src="./../../../common/js/jas-tools.js"></script>
+<script src="./../../../common/js/data-base-operation.js"></script>
+<script src="../../user-center/data-sync/local-server.js"></script>
+<script src="./../../../common/components/jas-components.js"></script>
+<script>
+	var vm = new Vue({
+		el: '._outer-wrapper',
+		data: function () {
+			var that = this;
+			var userBo = JSON.parse(localStorage.getItem("user"));
+			return {
+				photoOid: '',
+				sheetVisible: false,
+				actions: [{
+					name: '拍照',
+					method: function () {
+						that.takePhoto();
+					}
+				}, {
+					name: '从相册中选择',
+					method: function () {
+						that.selectPhoto();
+					}
+				}, ],
+				setList: [{
+					name: '头像',
+					isLink: true,
+					icon: "../../../common/images/girl.png",
+				}, {
+					name: '人脸采集',
+					isLink: true,
+					style: "display:none"
+				}, {
+					name: '账号',
+					isLink: false,
+					value: userBo ? userBo.userName : ''
+				}, {
+					name: '单位',
+					isLink: false,
+					value: userBo ? userBo.unitName.split("->")[userBo.unitName.split("->").length - 1] : ''
+				}, {
+					name: '密码修改',
+					isLink: true,
+					link: "updatePass.html"
+				}]
+			}
+		},
+		computed: {
+			styleBgImg: function () {
+				var obj = {
+					backgroundImage: '', //url(' + sUrl + ')
+					backgroundSize: 'cover',
+					backgroundPosition: 'center center',
+				};
+				if (this.photoOid) {
+					var src = [
+						jasTools.ajax.serverURL,
+						'DAQProject/attachment/app/getImageBySize.do?oid=',
+						this.photoOid,
+						'&token=',
+						localStorage.getItem("token")
+					].join('');
+				} else {
+					var src = '../../../common/images/girl.png ';
+				}
+				obj.backgroundImage = 'url(' + src + ')';
+				return obj;
+			},
+		},
+		created: function () {
+
+
+		},
+		mounted: function () {
+			var that = this;
+			appcan.ready(function () {
+				that.getFaceInfo();
+				that.requestFile();
+			});
+		},
+		methods: {
+			goto: function (item) {
+				if (item.link) {
+					appcan.window.open("updatePass", item.link, 10, 16, 0, 0, 0);
+				}
+				if (item.name == '头像') {
+					this.sheetVisible = true;
+				}
+				if (item.name == '人脸采集') {
+					this._setFaceInfo();
+				}
+			},
+			getFaceInfo: function () {
+				var that = this;
+				var obj = {
+					loginName: JSON.parse(localStorage.getItem("user")).loginName
+				};
+/*
+				localServer.userFaceInfo.getUserFaceCount(obj, function (data) {
+					if (data.status == 1) {
+						if (data.rows[0].total != 0) {
+							that.setList[1].style = "display:none";
+						}
+					}
+				});*/
+
+				if(localStorage.getItem("isFaceInfo")==1){
+                    that.setList[1].style = "display:none";
+                }
+			},
+			_setFaceInfo: function () {
+				var that=this;
+				var param = {
+					loginNum: JSON.parse(localStorage.getItem('user')).loginName,
+					token: localStorage.getItem("token")
+				};
+				try {
+					uexFaceRecognition.setFaceInfo(JSON.stringify(param), function (err, info) {
+						if (err == 1) {
+							that.setList[1].style = "display:none";
+							localStorage.setItem("isFaceInfo",1);
+							window.Vue && Vue.prototype.$toast('采集成功');
+						} else {
+							// that.setList[1].style = "display:block";
+							window.Vue && Vue.prototype.$toast('采集失败');
+						}
+					});
+				} catch (e) {
+					alert(e);
+				}
+			},
+			takePhoto: function () {
+				var that = this;
+				uexCamera.openInternal(0, 75, function (picPath) {
+					picPath && that.uploadPhoto(picPath);
+				});
+			},
+			selectPhoto: function () {
+				var that = this;
+				uexImage.openPicker({
+					min: 1,
+					max: 1,
+					quality: 0.5,
+					detailedInfo: false
+				}, function (error, info) {
+					info.data && info.data.forEach(function (picPath) {
+						picPath && that.uploadPhoto(picPath);
+					});
+				});
+			},
+			requestFile: function (bizId) {
+				var that = this;
+				var url = "/attachment/getInfo.do";
+				var sBizId = JSON.parse(localStorage.getItem('user')).oid;
+				jasTools.ajax.get(url, {
+					businessType: 'photo',
+					businessId: sBizId,
+				}, function (data) {
+					// alert(JSON.stringify(data, 4, 4));
+					var arr = data.rows;
+					data.rows.length > 0 && (that.photoOid = arr[arr.length - 1].oid);
+					// that.deleteFile(data.rows.map(function (item) {
+					// 	return item.oid;
+					// }).join(','));
+				});
+			},
+			deleteFile: function (oid) {
+				jasTools.ajax.get("/attachment/delete.do", {
+					oids: oid
+				}, function (data) {});
+			},
+			uploadPhoto: function (picPath) {
+				var that = this;
+				that.$indicator.open({
+					text: '正在上传图片...',
+					spinnerType: 'fading-circle'
+				});
+
+				var sBizId = JSON.parse(localStorage.getItem('user')).oid;
+				var sUrl = "/attachment/upload.do?businessId=" + sBizId + "&businessType=photo";
+
+				jasTools.ajax.uploadFile(sUrl, picPath, function (data) {
+					// alert(JSON.stringify(data))
+					that.photoOid && that.deleteFile(that.photoOid);
+					that.photoOid = data.rows[0];
+					that.$indicator.close();
+					window.Vue && Vue.prototype.$toast('上传成功');
+				}, function () {
+					that.$indicator.close();
+					window.Vue && Vue.prototype.$toast('网络连接失败，请检查您的网络');
+				});
+			}
+		},
+	});
+</script>
+
+</html>
